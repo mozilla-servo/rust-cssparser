@@ -5,6 +5,8 @@
 use crate::cow_rc_str::CowRcStr;
 use crate::tokenizer::{SourceLocation, SourcePosition, Token, Tokenizer};
 use smallvec::SmallVec;
+use std::error::Error;
+use std::fmt;
 use std::ops::BitOr;
 use std::ops::Range;
 
@@ -53,6 +55,20 @@ pub enum BasicParseErrorKind<'i> {
     QualifiedRuleInvalid,
 }
 
+impl<'i> BasicParseErrorKind<'i> {
+    fn description(&self) -> String {
+        match self {
+            BasicParseErrorKind::UnexpectedToken(token) => {
+                format!("Unexpected token: {:?}", token)
+            }
+            BasicParseErrorKind::EndOfInput => "End of input".to_owned(),
+            BasicParseErrorKind::AtRuleInvalid(message) => format!("Invalid @ rule: {}", message),
+            BasicParseErrorKind::AtRuleBodyInvalid => "Invalid @ rule body".to_owned(),
+            BasicParseErrorKind::QualifiedRuleInvalid => "Invalid qualified rule".to_owned(),
+        }
+    }
+}
+
 /// The funamental parsing errors that can be triggered by built-in parsing routines.
 #[derive(Clone, Debug, PartialEq)]
 pub struct BasicParseError<'i> {
@@ -60,6 +76,18 @@ pub struct BasicParseError<'i> {
     pub kind: BasicParseErrorKind<'i>,
     /// Location where this error occurred
     pub location: SourceLocation,
+}
+
+impl<'i> fmt::Display for BasicParseError<'i> {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str(self.kind.description().as_str())
+    }
+}
+
+impl<'i> Error for BasicParseError<'i> {
+    fn description(&self) -> &str {
+        "A BasicParseError has occurred, please use the Display trait to determine it's kind"
+    }
 }
 
 impl<'i, T> From<BasicParseError<'i>> for ParseError<'i, T> {
@@ -153,6 +181,27 @@ impl<'i, T> ParseError<'i, T> {
             kind: self.kind.into(),
             location: self.location,
         }
+    }
+}
+
+impl<'i, T> fmt::Display for ParseError<'i, T>
+where
+    T: fmt::Display,
+{
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        match &self.kind {
+            ParseErrorKind::Basic(basic_kind) => formatter.write_str(&basic_kind.description()),
+            ParseErrorKind::Custom(custom_type) => custom_type.fmt(formatter),
+        }
+    }
+}
+
+impl<'i, T> Error for ParseError<'i, T>
+where
+    T: Error,
+{
+    fn description(&self) -> &str {
+        "A ParseError has occurred, please use the Display trait to determine it's kind"
     }
 }
 
